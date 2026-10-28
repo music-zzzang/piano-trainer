@@ -528,7 +528,8 @@ try { $("student").value = localStorage.getItem("pianoTrainerName") || ""; } cat
 $("student").addEventListener("change", () => { try { localStorage.setItem("pianoTrainerName", $("student").value.trim()); } catch (e) {} });
 window.addEventListener("resize", () => { if (!mode && song) renderScore(); });
 window.__noteOn = (m) => onNoteOn(m, "test"); window.__steps = () => steps; window.__song = () => song; window.__stats = () => stats; window.__setHands = (v) => { setHands(v); refreshView(); }; window.__loadSong = loadSong;
-loadSong(SONGS[0].id); renderHistory(); connectMidi(false);
+const firstSong = new URLSearchParams(location.search).get("song") || "romance";
+songSel.value = SONGS.some((x) => x.id === firstSong) ? firstSong : SONGS[0].id; loadSong(songSel.value); renderHistory(); connectMidi(false);
 </script>
 </body>
 </html>
