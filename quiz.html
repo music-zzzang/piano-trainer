@@ -32,6 +32,9 @@
   .key.miss { background:#fca5a5; } .key.black.miss { background:#dc2626; }
   .key .nm { position:absolute; bottom:4px; left:0; right:0; text-align:center; font-size:0.85rem; color:#555; }
   .key.black .nm { color:#ddd; }
+  nav.pages { display:flex; gap:6px; flex-wrap:wrap; padding:6px 14px; background:#eef2f7; border-bottom:1px solid #d9e0ea; font-size:0.95rem; }
+  nav.pages a { padding:5px 12px; border-radius:999px; background:#fff; border:1px solid #d9e0ea; color:#1f2937; text-decoration:none; }
+  nav.pages a.here { background:#2563eb; color:#fff; border-color:#2563eb; }
 </style>
 </head>
 <body>
@@ -41,6 +44,8 @@
   <button id="connectBtn">피아노 연결</button>
   <label class="small"><input type="checkbox" id="showName"> 악보에 음이름 보기</label>
 </header>
+<nav class="pages"><a href="simple.html">1단계 C 치기</a><a href="quiz.html" class="here">2단계 음 읽고 치기 10문제</a><a href="index.html">곡 연습</a></nav>
+
 <main>
   <div class="ask"><span id="qnum" class="num">1 / 10</span><span>악보의 음을 피아노로 치세요.</span></div>
   <div id="score"></div>

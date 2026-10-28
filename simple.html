@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>가온다 치기 시험</title>
+<title>C 치기 시험</title>
 <script src="vexflow.js"></script>
 <style>
   * { box-sizing: border-box; }
@@ -28,16 +28,21 @@
   .key.miss { background:#fca5a5; } .key.black.miss { background:#dc2626; }
   .key .nm { position:absolute; bottom:4px; left:0; right:0; text-align:center; font-size:0.8rem; color:#555; }
   .key.black .nm { color:#ddd; }
+  nav.pages { display:flex; gap:6px; flex-wrap:wrap; padding:6px 14px; background:#eef2f7; border-bottom:1px solid #d9e0ea; font-size:0.95rem; }
+  nav.pages a { padding:5px 12px; border-radius:999px; background:#fff; border:1px solid #d9e0ea; color:#1f2937; text-decoration:none; }
+  nav.pages a.here { background:#2563eb; color:#fff; border-color:#2563eb; }
 </style>
 </head>
 <body>
 <header>
-  <h1>🎹 가온다 치기 시험</h1>
+  <h1>🎹 C 치기 시험</h1>
   <span id="midiStatus" class="status">피아노 연결 안 됨</span>
   <button id="connectBtn">피아노 연결</button>
 </header>
+<nav class="pages"><a href="simple.html" class="here">1단계 C 치기</a><a href="quiz.html">2단계 음 읽고 치기 10문제</a><a href="index.html">곡 연습</a></nav>
+
 <main>
-  <div class="ask">악보의 음(<b>가온다 = 도4</b>)을 피아노로 쳐 보세요.</div>
+  <div class="ask">악보의 음(<b>C</b>, 가온다)을 피아노로 쳐 보세요.</div>
   <div id="score"></div>
   <div id="big" class="big"></div>
   <div id="log" class="log">아직 받은 건반 신호가 없어요.</div>
@@ -47,7 +52,8 @@
 "use strict";
 const TARGET = 60; // 가온다 C4
 const NAMES_KO = ["도","도#","레","레#","미","파","파#","솔","솔#","라","라#","시"];
-const nameKo = (m) => NAMES_KO[m % 12] + (Math.floor(m / 12) - 1);
+const LET = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+const nameKo = (m) => LET[m % 12] + (Math.floor(m / 12) - 1);
 
 // 악보: 높은음자리표, 4/4, 가온다 온음표 하나
 const VF = Vex.Flow;
@@ -59,7 +65,7 @@ function renderScore() {
   const ctx = renderer.getContext();
   const stave = new VF.Stave(10, 20, w - 20).addClef("treble").addTimeSignature("4/4"); stave.setContext(ctx).draw();
   const note = new VF.StaveNote({ keys: ["c/4"], duration: "w" });
-  note.addModifier(new VF.Annotation("가온다").setFont("Malgun Gothic", 14).setVerticalJustification(VF.Annotation.VerticalJustify.BOTTOM), 0);
+  note.addModifier(new VF.Annotation("C").setFont("Malgun Gothic", 14).setVerticalJustification(VF.Annotation.VerticalJustify.BOTTOM), 0);
   const voice = new VF.Voice({ num_beats: 4, beat_value: 4 }).addTickables([note]);
   new VF.Formatter().joinVoices([voice]).format([voice], w - 120); voice.draw(ctx, stave);
   noteEl = note.getSVGElement(); colorNote("#2563eb");
@@ -74,7 +80,7 @@ function buildKeyboard(lo, hi) {
   const ww = 100 / whites.length;
   for (let m = lo; m <= hi; m++) if ([1,3,6,8,10].includes(m % 12)) {
     const left = whites.filter((w) => w < m).length; const d = document.createElement("div"); d.className = "key black"; d.dataset.m = m;
-    d.style.left = `${left * ww}%`; d.style.width = `${ww * 0.6}%`; d.style.marginLeft = `-${ww * 0.3}%`; d.innerHTML = `<span class="nm">${NAMES_KO[m % 12]}</span>`; kbd.appendChild(d); keyEls[m] = d;
+    d.style.left = `${left * ww}%`; d.style.width = `${ww * 0.6}%`; d.style.marginLeft = `-${ww * 0.3}%`; d.innerHTML = `<span class="nm">${LET[m % 12]}</span>`; kbd.appendChild(d); keyEls[m] = d;
   }
   kbd.querySelectorAll(".key").forEach((d) => d.addEventListener("pointerdown", (ev) => { ev.preventDefault(); onNoteOn(Number(d.dataset.m), "화면"); }));
   keyEls[TARGET].classList.add("target");
@@ -87,8 +93,8 @@ let count = 0;
 function onNoteOn(m, source) {
   count += 1;
   log.textContent = `${count}번째 신호 · ${source}에서 ${nameKo(m)} (MIDI ${m})`;
-  if (m === TARGET) { flash(m, "hit"); colorNote("#16a34a"); big.textContent = "맞았어요! 가온다"; big.className = "big good"; }
-  else { flash(m, "miss"); colorNote("#dc2626"); big.textContent = `${nameKo(m)} 말고 가온다(도4)`; big.className = "big bad"; }
+  if (m === TARGET) { flash(m, "hit"); colorNote("#16a34a"); big.textContent = "맞았어요! C"; big.className = "big good"; }
+  else { flash(m, "miss"); colorNote("#dc2626"); big.textContent = `${LET[m % 12]} 말고 C`; big.className = "big bad"; }
   setTimeout(() => colorNote("#2563eb"), 700);
 }
 

@@ -53,6 +53,9 @@
   dialog ol { padding-left:20px; }
   .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
   @media (max-width: 700px) { header h1 { width:100%; } .big { font-size:1.7rem; } #score { max-height:44vh; } }
+  nav.pages { display:flex; gap:6px; flex-wrap:wrap; padding:6px 14px; background:#eef2f7; border-bottom:1px solid #d9e0ea; font-size:0.95rem; }
+  nav.pages a { padding:5px 12px; border-radius:999px; background:#fff; border:1px solid #d9e0ea; color:#1f2937; text-decoration:none; }
+  nav.pages a.here { background:#2563eb; color:#fff; border-color:#2563eb; }
 </style>
 </head>
 <body>
@@ -65,6 +68,8 @@
   <button id="connectBtn">피아노 연결</button>
   <button id="helpBtn">도움말</button>
 </header>
+<nav class="pages"><a href="simple.html">1단계 C 치기</a><a href="quiz.html">2단계 음 읽고 치기 10문제</a><a href="index.html" class="here">곡 연습</a></nav>
+
 <main>
   <div class="toolbar">
     <button id="listenBtn">▶ 들어보기</button>
