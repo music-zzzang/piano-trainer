@@ -35,8 +35,13 @@
   .hint { font-size:0.95rem; color:var(--muted); min-height:1.4em; }
   .hint b { color:var(--ink); }
   .hint.good { color:var(--green); } .hint.bad { color:var(--red); }
+  #scoreWrap { position:relative; }
   #score { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px 6px; overflow-x:auto; overflow-y:auto; max-height:50vh; }
+  #score.flow { overflow:hidden; max-height:none; }
   #score svg { display:block; }
+  #cursor { position:absolute; top:6px; bottom:6px; width:3px; background:#f59e0b; border-radius:2px; opacity:0.85; pointer-events:none; display:none; }
+  #score.flow + #cursor { display:block; }
+  .stars { font-size:2.2rem; color:#f59e0b; letter-spacing:4px; }
   .big { font-size:2rem; font-weight:700; text-align:center; min-height:1.3em; }
   .big.good { color:var(--green); } .big.bad { color:var(--red); }
   .kbd-wrap { position:sticky; bottom:0; background:var(--bg); padding:6px 14px 10px; }
@@ -86,9 +91,10 @@
     <label><input type="checkbox" id="waitOnMiss" checked> 도전하기에서 틀리면 기다리기</label>
     <label><input type="checkbox" id="octaveFree"> 옥타브 달라도 정답</label>
     <label><input type="checkbox" id="showNames"> 음이름 보기</label>
+    <label><input type="checkbox" id="flowView" checked> 흐르는 악보</label>
   </div>
   <div id="hint" class="hint">곡과 손·마디를 고르고 <b>연습하기</b>를 누르세요. 파란 음표를 피아노로 치면 다음으로 넘어갑니다.</div>
-  <div id="score"></div>
+  <div id="scoreWrap"><div id="score" class="flow"></div><div id="cursor"></div></div>
   <div id="big" class="big"></div>
   <div id="resultPanel" class="panel" hidden></div>
   <div id="historyPanel" class="panel">
@@ -224,14 +230,18 @@ function keyOf(name) { const m = /^([A-G])(#?)(\d)$/.exec(name); return `${m[1].
 function renderScore() {
   scoreEl.innerHTML = ""; drawn = { els: {} };
   const parts = activeParts(); const { from, to } = section(); const barIdx = []; for (let b = from; b <= to; b += 1) barIdx.push(b);
-  const width = Math.max(scoreEl.clientWidth - 12, 520);
-  const barsPerLine = width > 900 ? 4 : (width > 600 ? 3 : 2);
+  const flow = $("flowView").checked; scoreEl.classList.toggle("flow", flow);
+  const viewW = Math.max(scoreEl.clientWidth - 12, 520);
+  const barsPerLine = flow ? barIdx.length : (viewW > 900 ? 4 : (viewW > 600 ? 3 : 2));
+  const scale = flow ? 1.35 : 1;
+  const barW = flow ? Math.max(230, Math.min(320, Math.round(viewW / 3))) : Math.floor((viewW - 20) / barsPerLine);
+  const width = flow ? 10 + barIdx.length * barW + Math.round(viewW / scale) : viewW;
   const lines = Math.ceil(barIdx.length / barsPerLine);
   const staffH = 95, lineH = parts.length * staffH + 30;
   const div = document.createElement("div"); scoreEl.appendChild(div);
-  const renderer = new VF.Renderer(div, VF.Renderer.Backends.SVG); renderer.resize(width, lines * lineH + 10);
-  const ctx = renderer.getContext();
-  const barW = Math.floor((width - 20) / barsPerLine); const showNames = $("showNames").checked;
+  const renderer = new VF.Renderer(div, VF.Renderer.Backends.SVG); renderer.resize(width * scale, (lines * lineH + 10) * scale);
+  const ctx = renderer.getContext(); ctx.scale(scale, scale); drawn.scale = scale;
+  const showNames = $("showNames").checked;
   parts.forEach((p) => { drawn.els[p] = {}; });
   barIdx.forEach((bi, k) => {
     const line = Math.floor(k / barsPerLine), col = k % barsPerLine;
@@ -278,8 +288,14 @@ function colorNote(ref, color) {
   const el = noteEl(ref); if (!el) return;
   el.querySelectorAll("path, rect, text").forEach((e) => { if (!color) { e.removeAttribute("fill"); e.removeAttribute("stroke"); } else { e.setAttribute("fill", color); e.setAttribute("stroke", color); } });
 }
+function noteX(ref) { const n = drawn.els[ref.part] && drawn.els[ref.part][ref.i]; return n ? n.getAbsoluteX() * (drawn.scale || 1) : 0; }
+function stepX(s) { return Math.min(...s.notes.map(noteX)); }
+const CURSOR_AT = 140;   // 뷰포트 왼쪽에서 연주선까지 px
+function placeCursor() { $("cursor").style.left = (CURSOR_AT + 6) + "px"; }
+function scrollToX(x) { if (!scoreEl.classList.contains("flow")) return; scoreEl.scrollLeft = Math.max(0, x - CURSOR_AT); }
 function scrollToNote(ref) {
   const el = noteEl(ref); if (!el) return;
+  if (scoreEl.classList.contains("flow")) { scrollToX(noteX(ref)); return; }
   const box = el.getBoundingClientRect(), host = scoreEl.getBoundingClientRect();
   if (box.top < host.top + 10 || box.bottom > host.bottom - 10) scoreEl.scrollTop += box.top - host.top - 40;
 }
@@ -345,10 +361,10 @@ function start(m) {
   if (!steps.length) { setHint("고른 구간에 음표가 없어요."); mode = null; return; }
   const total = steps.reduce((a, s) => a + s.notes.length, 0);
   stats = { hit: 0, wrong: 0, late: 0, pauses: 0, start: Date.now(), notes: total, wrongNotes: new Set(), firstTryMiss: new Set() };
-  resetColors(); setButtons(true); resultPanel.hidden = true; scoreEl.scrollTop = 0; ensureAudio();
+  resetColors(); setButtons(true); resultPanel.hidden = true; scoreEl.scrollTop = 0; scrollToX(stepX(steps[0])); ensureAudio();
   if (m === "listen") runListen(); else if (m === "practice") { setHint("파란 음표를 피아노로 치세요. 같은 박의 음은 <b>모두 쳐야</b> 넘어갑니다."); stepPractice(); } else runChallenge();
 }
-function stop(silent) { clearTimers(); const was = mode; mode = null; chal = null; setButtons(false); clearKeys("expect"); if (!silent && was) { setHint("멈췄습니다."); setBig(""); } }
+function stop(silent) { clearTimers(); if (raf) { clearInterval(raf); raf = 0; } const was = mode; mode = null; chal = null; setButtons(false); clearKeys("expect"); if (!silent && was) { setHint("멈췄습니다."); setBig(""); } }
 
 // ---- 들어보기
 function runListen() {
@@ -405,9 +421,23 @@ function runChallenge() {
   setHint(`${song.time[0]}박 세고 시작합니다. <b>박자에 맞춰</b> 치세요.` + (waitMode ? " 틀리거나 놓치면 그 음에서 멈추고, 맞게 치면 이어서 갑니다." : "")); setBig("준비…");
   const start = nowS() + 0.2; for (let b = 0; b < song.time[0]; b += 1) click(toAudio(start + beat * b), b === 0);
   chal.t0 = start + beat * song.time[0];  // steps[0] 이 울리는 시각
-  cur = 0; scheduleFrom(cur); scheduleBeats();
+  if (steps.length > 1) chal.pxPerUnit = (stepX(steps[steps.length - 1]) - stepX(steps[0])) / Math.max(1, steps[steps.length - 1].t - steps[0].t);
+  cur = 0; scheduleFrom(cur); scheduleBeats(); if (!raf) raf = setInterval(flowLoop, 33);
 }
 function stepTime(i) { return chal.t0 + (steps[i].t - chal.base) * chal.spu; }
+let raf = 0;
+function flowLoop() {
+  if (!chal || mode !== "challenge") { if (raf) { clearInterval(raf); raf = 0; } return; }
+  if (!chal.paused && scoreEl.classList.contains("flow")) {
+    const u = chal.base + (nowS() - chal.t0) / chal.spu;   // 현재 곡 위치(16분음표 단위)
+    let i = 0; while (i < steps.length - 1 && steps[i + 1].t <= u) i += 1;
+    const x0 = stepX(steps[i]); let x = x0;
+    if (u < steps[0].t) x = x0 - (steps[0].t - u) * (chal.pxPerUnit || 0);
+    else if (i < steps.length - 1) { const x1 = stepX(steps[i + 1]); x = x0 + (x1 - x0) * Math.min(1, (u - steps[i].t) / (steps[i + 1].t - steps[i].t)); }
+    else x = x0 + (u - steps[i].t) * (chal.pxPerUnit || 0);
+    scrollToX(x);
+  }
+}
 function scheduleBeats() {
   // 현재 박에서 끝까지 메트로놈을 예약 (멈추면 clearTimers 로 함께 취소됨)
   const beatUnits = 16 / song.time[1]; const lastT = steps[steps.length - 1].t + steps[steps.length - 1].units;
@@ -421,7 +451,7 @@ function scheduleFrom(i0) {
   for (let i = i0; i < steps.length; i += 1) {
     const s = steps[i]; const at = stepTime(i); const ms = (at - nowS()) * 1000;
     later(() => { if (!chal || chal.paused) return; cur = i; if (!s.pending) s.pending = s.notes.map((n) => ({ ...n, done: false })); s.open = true; dbg("step", i);
-      stepColor(s, "#2563eb"); scrollToNote(s.notes[0]); clearKeys("expect"); s.notes.forEach((n) => markKey(n.midi, "expect")); setBig(describe(s)); }, ms);
+      stepColor(s, "#2563eb"); if (!scoreEl.classList.contains("flow")) scrollToNote(s.notes[0]); clearKeys("expect"); s.notes.forEach((n) => markKey(n.midi, "expect")); setBig(describe(s)); }, ms);
     const windowMs = Math.max(250, s.units * chal.spu * 1000 * 0.75);
     later(() => { if (!chal || chal.paused) return; closeStep(i); }, ms + windowMs);
   }
@@ -471,9 +501,10 @@ function finish() {
   const grade = acc >= 95 ? "최고예요" : acc >= 85 ? "잘했어요" : acc >= 70 ? "좋아요, 조금 더" : "다시 연습해 봐요";
   const wrongBars = [...stats.wrongNotes].sort((a, b) => a - b).map((b) => b + 1).slice(0, 10);
   const handsKo = { rh: "오른손", lh: "왼손", both: "양손" }[hands]; const { from, to } = section();
+  const stars = acc >= 95 ? 3 : acc >= 80 ? 2 : acc >= 60 ? 1 : 0;
   setBig(`${grade} (${acc}점)`, acc >= 85 ? "good" : ""); setHint("끝났어요. 틀린 음표는 빨간색입니다. 그 마디만 골라 다시 연습해 보세요.");
   resultPanel.hidden = false;
-  resultPanel.innerHTML = `<h2>결과 — ${song.title} · ${handsKo} · ${from + 1}~${to + 1}마디 · ${m === "practice" ? "연습하기" : "도전하기"} · 빠르기 ${Math.round(tempoFactor() * 100)}%</h2>
+  resultPanel.innerHTML = `<div class="stars">${"★".repeat(stars)}${"☆".repeat(3 - stars)}</div><h2>결과 — ${song.title} · ${handsKo} · ${from + 1}~${to + 1}마디 · ${m === "practice" ? "연습하기" : "도전하기"} · 빠르기 ${Math.round(tempoFactor() * 100)}%</h2>
     <div class="result-grade">${acc}점 · ${grade}</div>
     <table><tr><th>전체 음</th><td>${total}</td><th>한 번에 맞춘 음</th><td>${firstTry}</td></tr>
     <tr><th>틀리게 친 횟수</th><td>${stats.wrong}</td><th>${m === "challenge" ? (chalWait ? "멈춘 횟수" : "놓친 음") : "걸린 시간"}</th><td>${m === "challenge" ? (chalWait ? stats.pauses : stats.late) : secs + "초"}</td></tr>
@@ -508,7 +539,7 @@ function loadSong(id) {
 }
 function refreshView() {
   const parts = activeParts(); const ms = parts.flatMap((p) => song.parts[p].notes.filter((n) => !n.rest).flatMap((n) => n.midis));
-  buildKeyboard(Math.min(...ms) - 2, Math.max(...ms) + 2); renderScore(); resultPanel.hidden = true; setBig("");
+  buildKeyboard(Math.min(...ms) - 2, Math.max(...ms) + 2); renderScore(); placeCursor(); scoreEl.scrollLeft = 0; resultPanel.hidden = true; setBig("");
 }
 function setHands(v) { hands = v; $("hands").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.v === v)); }
 const songSel = $("song"); SONGS.forEach((s) => songSel.appendChild(new Option(s.title, s.id)));
@@ -517,6 +548,7 @@ $("hands").querySelectorAll("button").forEach((b) => b.addEventListener("click",
 $("secFrom").addEventListener("change", () => { if (Number($("secTo").value) < Number($("secFrom").value)) $("secTo").value = $("secFrom").value; refreshView(); });
 $("secTo").addEventListener("change", () => { if (Number($("secTo").value) < Number($("secFrom").value)) $("secFrom").value = $("secTo").value; refreshView(); });
 $("showNames").addEventListener("change", () => { if (!mode) renderScore(); });
+$("flowView").addEventListener("change", () => { if (!mode) renderScore(); });
 $("waitOnMiss").addEventListener("change", () => { chalWait = $("waitOnMiss").checked; });
 $("listenBtn").addEventListener("click", () => start("listen"));
 $("practiceBtn").addEventListener("click", () => start("practice"));
