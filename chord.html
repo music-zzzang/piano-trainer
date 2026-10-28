@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>코드 치기</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif; background:#f7f9fc; color:#1f2937; display:flex; flex-direction:column; min-height:100vh; }
+  header { display:flex; flex-wrap:wrap; gap:10px; align-items:center; padding:10px 14px; background:#fff; border-bottom:1px solid #d9e0ea; }
+  h1 { font-size:1.2rem; margin:0 8px 0 0; }
+  button { font-size:1.05rem; padding:8px 16px; border-radius:10px; border:1px solid #2563eb; background:#2563eb; color:#fff; }
+  .status { padding:5px 12px; border-radius:999px; background:#fee2e2; color:#991b1b; font-size:0.95rem; }
+  .status.on { background:#dcfce7; color:#166534; }
+  nav.pages { display:flex; gap:6px; flex-wrap:wrap; padding:6px 14px; background:#eef2f7; border-bottom:1px solid #d9e0ea; font-size:0.95rem; }
+  nav.pages a { padding:5px 12px; border-radius:999px; background:#fff; border:1px solid #d9e0ea; color:#1f2937; text-decoration:none; }
+  nav.pages a.here { background:#2563eb; color:#fff; border-color:#2563eb; }
+  .levels { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; padding:10px 14px 0; }
+  .levels button { background:#fff; color:#1f2937; border-color:#d9e0ea; }
+  .levels button.on { background:#2563eb; color:#fff; border-color:#2563eb; }
+  main { flex:1; display:flex; flex-direction:column; align-items:center; gap:8px; padding:8px 12px; }
+  .ask { font-size:1.15rem; display:flex; gap:14px; align-items:center; flex-wrap:wrap; justify-content:center; }
+  .num { font-weight:700; color:#2563eb; }
+  .chord { font-size:5rem; font-weight:800; color:#2563eb; line-height:1.1; }
+  .big { font-size:1.9rem; font-weight:700; min-height:1.3em; text-align:center; }
+  .big.good { color:#16a34a; } .big.bad { color:#dc2626; }
+  .held { font-size:1.05rem; color:#374151; min-height:1.4em; }
+  .held b { font-size:1.25rem; }
+  .log { font-size:0.9rem; color:#6b7280; min-height:1.2em; }
+  .panel { background:#fff; border:1px solid #d9e0ea; border-radius:12px; padding:12px 16px; font-size:1.05rem; text-align:center; }
+  .panel b { font-size:1.4rem; }
+  label.small { font-size:0.9rem; color:#6b7280; display:flex; align-items:center; gap:5px; }
+  .kbd-wrap { padding:6px 14px 12px; }
+  .kbd { position:relative; height:150px; display:flex; user-select:none; touch-action:none; }
+  .key { position:relative; flex:1; border:1px solid #9aa4b2; border-radius:0 0 6px 6px; background:#fff; }
+  .key.black { position:absolute; top:0; height:62%; background:#222; border-color:#000; z-index:2; border-radius:0 0 4px 4px; }
+  .key.down { background:#bfdbfe; } .key.black.down { background:#3b82f6; }
+  .key.hit { background:#86efac; } .key.black.hit { background:#16a34a; }
+  .key.miss { background:#fca5a5; } .key.black.miss { background:#dc2626; }
+  .key .nm { position:absolute; bottom:4px; left:0; right:0; text-align:center; font-size:0.8rem; color:#555; }
+  .key.black .nm { color:#ddd; font-size:0.7rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎹 코드 치기</h1>
+  <span id="midiStatus" class="status">피아노 연결 안 됨</span>
+  <button id="connectBtn">피아노 연결</button>
+  <label class="small"><input type="checkbox" id="anyInv" checked> 자리바꿈·옥타브 달라도 정답</label>
+</header>
+<nav class="pages"><a href="simple.html">1단계 C 치기</a><a href="quiz.html">2단계 음 읽고 치기 10문제</a><a href="chord.html" class="here">3단계 코드 치기</a><a href="index.html">곡 연습</a></nav>
+<div class="levels">
+  <button data-level="0" class="on">1. 쉬운 코드 (흰건반 3화음)</button>
+  <button data-level="1">2. 검은건반 코드</button>
+  <button data-level="2">3. 7화음</button>
+</div>
+<main>
+  <div class="ask"><span id="qnum" class="num">1 / 10</span><span id="askText">이 코드를 피아노로 치세요 (세 음을 함께).</span></div>
+  <div id="chord" class="chord">C</div>
+  <div id="held" class="held">누르고 있는 건반: <b>–</b></div>
+  <div id="big" class="big"></div>
+  <div id="log" class="log">아직 받은 건반 신호가 없어요.</div>
+  <div id="result" class="panel" hidden></div>
+</main>
+<div class="kbd-wrap"><div id="kbd" class="kbd"></div></div>
+<script>
+"use strict";
+const N = 10;
+const SHARP = ["C","C♯","D","D♯","E","F","F♯","G","G♯","A","A♯","B"];
+const FLAT  = ["C","D♭","D","E♭","E","F","G♭","G","A♭","A","B♭","B"];
+const ROOT_PC = { "C":0,"C♯":1,"D♭":1,"D":2,"D♯":3,"E♭":3,"E":4,"F":5,"F♯":6,"G♭":6,"G":7,"G♯":8,"A♭":8,"A":9,"A♯":10,"B♭":10,"B":11 };
+const QUAL = { "":[0,4,7], "m":[0,3,7], "7":[0,4,7,10], "maj7":[0,4,7,11], "m7":[0,3,7,10] };
+const LETTERS = "CDEFGAB", NAT_PC = [0,2,4,5,7,9,11];
+// 단계별 문제 풀: [뿌리, 종류]
+const LEVELS = [
+  { name: "쉬운 코드", chords: [["C",""],["D","m"],["E","m"],["F",""],["G",""],["A","m"]] },
+  { name: "검은건반 코드", chords: [["D",""],["E",""],["A",""],["B",""],["B♭",""],["E♭",""],["A♭",""],["D♭",""],["B","m"],["C","m"],["F","m"],["G","m"],["F♯","m"],["C♯","m"],["G♯","m"]] },
+  { name: "7화음", chords: [["C","7"],["D","7"],["E","7"],["F","7"],["G","7"],["A","7"],["B","7"],["B♭","7"],["E♭","7"],
+                           ["C","maj7"],["F","maj7"],["G","maj7"],["D","maj7"],["A","maj7"],["B♭","maj7"],["E♭","maj7"],
+                           ["D","m7"],["E","m7"],["A","m7"],["G","m7"],["C","m7"],["F","m7"],["B","m7"]] },
+];
+// 구성음 이름은 뿌리음 글자에서 3도씩 올라가며 붙인다 (C7 = C E G B♭, Cm = C E♭ G)
+function spell(rootLetter, rootPc, interval, step) {
+  const li = (LETTERS.indexOf(rootLetter) + step) % 7; const pc = (rootPc + interval) % 12;
+  let d = (pc - NAT_PC[li] + 12) % 12; if (d > 6) d -= 12;
+  return LETTERS[li] + (d === 1 ? "♯" : d === -1 ? "♭" : d === 2 ? "𝄪" : d === -2 ? "𝄫" : "");
+}
+function chordOf([root, q]) {
+  const pc = ROOT_PC[root]; const rootMidi = 60 + pc; // 4옥타브 안의 뿌리음
+  const ivs = QUAL[q]; const notes = ivs.map((iv) => rootMidi + iv);
+  const spelled = ivs.map((iv, k) => spell(root[0], pc, iv, k * 2));
+  const names = spelled.some((n) => n.includes("♭")) ? FLAT : SHARP;
+  return { name: root + q, notes, pcs: new Set(notes.map((m) => m % 12)), names, spelled };
+}
+let level = 0;
+function makeQuiz() { const p = LEVELS[level].chords; const q = []; let prev = ""; while (q.length < N) { const c = chordOf(p[Math.floor(Math.random() * p.length)]); if (c.name === prev) continue; q.push(c); prev = c.name; } return q; }
+const sameSet = (a, b) => a.size === b.size && [...a].every((x) => b.has(x));
+
+// 건반 C3(48)~C6(84)
+const kbd = document.getElementById("kbd"); const keyEls = {};
+function buildKeyboard(lo, hi) {
+  const whites = []; for (let m = lo; m <= hi; m++) if (![1,3,6,8,10].includes(m % 12)) whites.push(m);
+  whites.forEach((m) => { const d = document.createElement("div"); d.className = "key"; d.dataset.m = m; d.innerHTML = `<span class="nm">${SHARP[m % 12]}${m % 12 === 0 ? Math.floor(m / 12) - 1 : ""}</span>`; kbd.appendChild(d); keyEls[m] = d; });
+  const ww = 100 / whites.length;
+  for (let m = lo; m <= hi; m++) if ([1,3,6,8,10].includes(m % 12)) {
+    const left = whites.filter((w) => w < m).length; const d = document.createElement("div"); d.className = "key black"; d.dataset.m = m;
+    d.style.left = `${left * ww}%`; d.style.width = `${ww * 0.6}%`; d.style.marginLeft = `-${ww * 0.3}%`; d.innerHTML = `<span class="nm">${SHARP[m % 12]}<br>${FLAT[m % 12]}</span>`; kbd.appendChild(d); keyEls[m] = d;
+  }
+  kbd.querySelectorAll(".key").forEach((d) => {
+    const m = Number(d.dataset.m);
+    d.addEventListener("pointerdown", (ev) => { ev.preventDefault(); d.setPointerCapture(ev.pointerId); onNoteOn(m, "화면"); });
+    const up = () => onNoteOff(m, "화면"); d.addEventListener("pointerup", up); d.addEventListener("pointercancel", up);
+  });
+}
+function flashAll(cls) { held.forEach((m) => { const d = keyEls[m]; if (d) { d.classList.add(cls); setTimeout(() => d.classList.remove(cls), 600); } }); }
+
+// 진행·판정
+const big = document.getElementById("big"), log = document.getElementById("log"), qnum = document.getElementById("qnum"), result = document.getElementById("result"), chordEl = document.getElementById("chord"), heldEl = document.getElementById("held"), askText = document.getElementById("askText");
+let quiz = [], idx = 0, wrongHere = false, firstTry = 0, wrongTotal = 0, startAt = 0, done = false, waitRelease = false, count = 0;
+const held = new Set();
+function startQuiz() { quiz = makeQuiz(); idx = 0; firstTry = 0; wrongTotal = 0; done = false; waitRelease = false; startAt = Date.now(); result.hidden = true; big.textContent = ""; big.className = "big"; showQ(); }
+function showQ() { wrongHere = false; const c = quiz[idx]; qnum.textContent = `${idx + 1} / ${N}`; chordEl.textContent = c.name; askText.textContent = `이 코드를 피아노로 치세요 (${c.notes.length}음을 함께).`; }
+function showHeld(names) { const arr = [...held].sort((a, b) => a - b); heldEl.innerHTML = "누르고 있는 건반: <b>" + (arr.length ? arr.map((m) => (names || SHARP)[m % 12] + (Math.floor(m / 12) - 1)).join(" ") : "–") + "</b>"; }
+function onNoteOn(m, source) {
+  count += 1; log.textContent = `${count}번째 신호 · ${source}에서 ${SHARP[m % 12]}${Math.floor(m / 12) - 1} 누름`;
+  held.add(m); const d = keyEls[m]; if (d) d.classList.add("down"); showHeld(quiz[idx] && quiz[idx].names);
+  if (done || waitRelease) return;
+  judge();
+}
+function onNoteOff(m) {
+  held.delete(m); const d = keyEls[m]; if (d) d.classList.remove("down"); showHeld(quiz[idx] && quiz[idx].names);
+  if (waitRelease && held.size === 0) { waitRelease = false; idx += 1; if (idx >= N) finish(); else { big.textContent = ""; big.className = "big"; showQ(); } }
+}
+function judge() {
+  const c = quiz[idx]; if (held.size < c.notes.length) return;
+  const anyInv = document.getElementById("anyInv").checked;
+  const ok = anyInv ? sameSet(new Set([...held].map((m) => m % 12)), c.pcs) : (held.size === c.notes.length && c.notes.every((m) => held.has(m)));
+  if (ok) { flashAll("hit"); big.textContent = `맞았어요! ${c.name} (${c.spelled.join(" ")})`; big.className = "big good"; if (!wrongHere) firstTry += 1; waitRelease = true; }
+  else {
+    flashAll("miss"); wrongHere = true; wrongTotal += 1;
+    const played = [...held].sort((a, b) => a - b).map((m) => c.names[m % 12]).join(" ");
+    big.textContent = `${played} 말고 ${c.name} = ${c.spelled.join(" ")}`; big.className = "big bad";
+  }
+}
+function finish() {
+  done = true; const secs = Math.round((Date.now() - startAt) / 1000);
+  qnum.textContent = `${N} / ${N}`; chordEl.textContent = "끝"; big.textContent = firstTry === N ? "모두 한 번에 맞았어요!" : "끝났어요"; big.className = "big good";
+  result.hidden = false;
+  result.innerHTML = `<div>${LEVELS[level].name} 10문제 중 한 번에 맞춘 코드 <b>${firstTry}</b>개 · 틀리게 친 횟수 ${wrongTotal}번 · 걸린 시간 ${secs}초</div>
+    <div style="margin-top:10px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap"><button id="again">같은 단계 다시 (새 문제 10개)</button>${level < LEVELS.length - 1 ? `<button id="next">다음 단계로</button>` : ""}</div>`;
+  document.getElementById("again").addEventListener("click", startQuiz);
+  const nx = document.getElementById("next"); if (nx) nx.addEventListener("click", () => setLevel(level + 1));
+}
+function setLevel(l) { level = l; document.querySelectorAll(".levels button").forEach((b) => b.classList.toggle("on", Number(b.dataset.level) === l)); startQuiz(); }
+document.querySelectorAll(".levels button").forEach((b) => b.addEventListener("click", () => setLevel(Number(b.dataset.level))));
+
+// MIDI
+const midiStatus = document.getElementById("midiStatus"); let midi = null;
+async function connect(byClick) {
+  if (!navigator.requestMIDIAccess) { midiStatus.textContent = "이 브라우저는 피아노 연결 불가 (크롬으로 여세요)"; return; }
+  try { midi = midi || await navigator.requestMIDIAccess(); midi.onstatechange = refresh; refresh(); }
+  catch (e) { midiStatus.textContent = "연결 허용이 필요해요"; midiStatus.className = "status"; if (byClick) alert("허용을 눌러 주세요. (" + e.message + ")"); }
+}
+function refresh() {
+  const ins = [...midi.inputs.values()];
+  ins.forEach((i) => { i.onmidimessage = (ev) => { const [st, d1, d2] = ev.data; const cmd = st & 0xf0; if (cmd === 0x90 && d2 > 0) onNoteOn(d1, "피아노"); else if (cmd === 0x80 || (cmd === 0x90 && d2 === 0)) onNoteOff(d1); }; });
+  if (ins.length) { midiStatus.textContent = "연결됨: " + ins.map((i) => i.name).join(", "); midiStatus.className = "status on"; }
+  else { midiStatus.textContent = "피아노를 찾지 못했어요 (USB 케이블·전원 확인)"; midiStatus.className = "status"; }
+}
+document.getElementById("connectBtn").addEventListener("click", () => connect(true));
+window.__noteOn = (m) => onNoteOn(m, "시험"); window.__noteOff = (m) => onNoteOff(m); window.__quiz = () => quiz.slice(); window.__setLevel = setLevel; window.__levels = LEVELS; window.__chordOf = chordOf;
+buildKeyboard(48, 84); startQuiz(); connect(false);
+</script>
+</body>
+</html>
