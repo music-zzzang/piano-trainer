@@ -39,6 +39,11 @@
   .key.miss { background:#fca5a5; } .key.black.miss { background:#dc2626; }
   .key .nm { position:absolute; bottom:4px; left:0; right:0; text-align:center; font-size:0.8rem; color:#555; }
   .key.black .nm { color:#ddd; font-size:0.7rem; }
+  .hint { font-size:1.1rem; color:#374151; background:#fff7ed; border:1px solid #fdba74; border-radius:10px; padding:6px 16px; text-align:center; }
+  .hint b { color:#c2410c; }
+  .key .no { position:absolute; top:4px; left:0; right:0; text-align:center; font-size:0.9rem; font-weight:700; color:#2563eb; }
+  .key.black .no { color:#fff; font-size:0.8rem; }
+  .key.root { box-shadow: inset 0 0 0 3px #f59e0b; }
 </style>
 </head>
 <body>
@@ -47,6 +52,7 @@
   <span id="midiStatus" class="status">피아노 연결 안 됨</span>
   <button id="connectBtn">피아노 연결</button>
   <label class="small"><input type="checkbox" id="anyInv" checked> 자리바꿈·옥타브 달라도 정답</label>
+  <label class="small"><input type="checkbox" id="hintOn" checked> 힌트 (건반 개수)</label>
 </header>
 <nav class="pages"><a href="simple.html">1단계 C 치기</a><a href="quiz.html">2단계 음 읽고 치기 10문제</a><a href="chord.html" class="here">3단계 코드 치기</a><a href="index.html">곡 연습</a></nav>
 <div class="levels">
@@ -57,6 +63,7 @@
 <main>
   <div class="ask"><span id="qnum" class="num">1 / 10</span><span id="askText">이 코드를 피아노로 치세요 (세 음을 함께).</span></div>
   <div id="chord" class="chord">C</div>
+  <div id="hint" class="hint"></div>
   <div id="held" class="held">누르고 있는 건반: <b>–</b></div>
   <div id="big" class="big"></div>
   <div id="log" class="log">아직 받은 건반 신호가 없어요.</div>
@@ -71,6 +78,14 @@ const FLAT  = ["C","D♭","D","E♭","E","F","G♭","G","A♭","A","B♭","B"];
 const ROOT_PC = { "C":0,"C♯":1,"D♭":1,"D":2,"D♯":3,"E♭":3,"E":4,"F":5,"F♯":6,"G♭":6,"G":7,"G♯":8,"A♭":8,"A":9,"A♯":10,"B♭":10,"B":11 };
 const QUAL = { "":[0,4,7], "m":[0,3,7], "7":[0,4,7,10], "maj7":[0,4,7,11], "m7":[0,3,7,10] };
 const LETTERS = "CDEFGAB", NAT_PC = [0,2,4,5,7,9,11];
+// 건반 개수 힌트 (수업 프린트 "코드의 기초" 방식: 근음을 1로 두고 양 끝을 포함해 센다. 장3도 = 건반 5개, 단3도 = 건반 4개)
+const HINT = {
+  "":     { name:"장3화음", parts:["장3도(건반 <b>5</b>개)", "단3도(건반 <b>4</b>개)"], nums:[1,5,8] },
+  "m":    { name:"단3화음", parts:["단3도(건반 <b>4</b>개)", "장3도(건반 <b>5</b>개)"], nums:[1,4,8] },
+  "7":    { name:"딸림7화음", parts:["장3화음(5개+4개)", "단3도(건반 <b>4</b>개)"], nums:[1,5,8,11] },
+  "maj7": { name:"장7화음", parts:["장3화음(5개+4개)", "장3도(건반 <b>5</b>개)"], nums:[1,5,8,12] },
+  "m7":   { name:"단7화음", parts:["단3화음(4개+5개)", "단3도(건반 <b>4</b>개)"], nums:[1,4,8,11] },
+};
 // 단계별 문제 풀: [뿌리, 종류]
 const LEVELS = [
   { name: "쉬운 코드", chords: [["C",""],["D","m"],["E","m"],["F",""],["G",""],["A","m"]] },
@@ -90,7 +105,7 @@ function chordOf([root, q]) {
   const ivs = QUAL[q]; const notes = ivs.map((iv) => rootMidi + iv);
   const spelled = ivs.map((iv, k) => spell(root[0], pc, iv, k * 2));
   const names = spelled.some((n) => n.includes("♭")) ? FLAT : SHARP;
-  return { name: root + q, notes, pcs: new Set(notes.map((m) => m % 12)), names, spelled };
+  return { name: root + q, q, rootMidi, notes, pcs: new Set(notes.map((m) => m % 12)), names, spelled };
 }
 let level = 0;
 function makeQuiz() { const p = LEVELS[level].chords; const q = []; let prev = ""; while (q.length < N) { const c = chordOf(p[Math.floor(Math.random() * p.length)]); if (c.name === prev) continue; q.push(c); prev = c.name; } return q; }
@@ -119,7 +134,18 @@ const big = document.getElementById("big"), log = document.getElementById("log")
 let quiz = [], idx = 0, wrongHere = false, firstTry = 0, wrongTotal = 0, startAt = 0, done = false, waitRelease = false, count = 0;
 const held = new Set();
 function startQuiz() { quiz = makeQuiz(); idx = 0; firstTry = 0; wrongTotal = 0; done = false; waitRelease = false; startAt = Date.now(); result.hidden = true; big.textContent = ""; big.className = "big"; showQ(); }
-function showQ() { wrongHere = false; const c = quiz[idx]; qnum.textContent = `${idx + 1} / ${N}`; chordEl.textContent = c.name; askText.textContent = `이 코드를 피아노로 치세요 (${c.notes.length}음을 함께).`; }
+function showQ() { wrongHere = false; const c = quiz[idx]; qnum.textContent = `${idx + 1} / ${N}`; chordEl.textContent = c.name; askText.textContent = `이 코드를 피아노로 치세요 (${c.notes.length}음을 함께).`; showHint(); }
+const hintEl = document.getElementById("hint"), hintOn = document.getElementById("hintOn");
+function showHint() {
+  Object.values(keyEls).forEach((d) => { d.classList.remove("root"); const n = d.querySelector(".no"); if (n) n.remove(); });
+  const c = quiz[idx];
+  if (!hintOn.checked || done || !c) { hintEl.hidden = true; return; }
+  const h = HINT[c.q]; hintEl.hidden = false;
+  hintEl.innerHTML = `<b>${h.name}</b> = ${h.parts.join(" + ")} → 근음을 1번으로 세어 <b>${h.nums.join("·")}</b>번 건반`;
+  for (let k = 0; k < 12; k++) { const d = keyEls[c.rootMidi + k]; if (!d) continue; const s = document.createElement("span"); s.className = "no"; s.textContent = k + 1; d.appendChild(s); }
+  keyEls[c.rootMidi].classList.add("root");
+}
+hintOn.addEventListener("change", showHint);
 function showHeld(names) { const arr = [...held].sort((a, b) => a - b); heldEl.innerHTML = "누르고 있는 건반: <b>" + (arr.length ? arr.map((m) => (names || SHARP)[m % 12] + (Math.floor(m / 12) - 1)).join(" ") : "–") + "</b>"; }
 function onNoteOn(m, source) {
   count += 1; log.textContent = `${count}번째 신호 · ${source}에서 ${SHARP[m % 12]}${Math.floor(m / 12) - 1} 누름`;
@@ -144,7 +170,7 @@ function judge() {
 }
 function finish() {
   done = true; const secs = Math.round((Date.now() - startAt) / 1000);
-  qnum.textContent = `${N} / ${N}`; chordEl.textContent = "끝"; big.textContent = firstTry === N ? "모두 한 번에 맞았어요!" : "끝났어요"; big.className = "big good";
+  qnum.textContent = `${N} / ${N}`; chordEl.textContent = "끝"; showHint(); big.textContent = firstTry === N ? "모두 한 번에 맞았어요!" : "끝났어요"; big.className = "big good";
   result.hidden = false;
   result.innerHTML = `<div>${LEVELS[level].name} 10문제 중 한 번에 맞춘 코드 <b>${firstTry}</b>개 · 틀리게 친 횟수 ${wrongTotal}번 · 걸린 시간 ${secs}초</div>
     <div style="margin-top:10px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap"><button id="again">같은 단계 다시 (새 문제 10개)</button>${level < LEVELS.length - 1 ? `<button id="next">다음 단계로</button>` : ""}</div>`;
